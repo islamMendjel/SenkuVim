@@ -1,6 +1,6 @@
 # SenkuVim
 
-> **A zero-dependency, production-grade modal terminal IDE written in pure C17 for Arch Linux and POSIX systems, styled after Dimension C-137 Rick Sanchez aesthetics.**
+> **A zero-dependency, modal terminal IDE written in pure C17 for Arch Linux and POSIX systems, styled after Dimension C-137 Rick Sanchez aesthetics.**
 
 SenkuVim blends the modal editing efficiency of Neovim with the ergonomics of modern graphical editors (VS Code-style smart tabs, auto-indentation, and auto-pairing). Built from the ground up without heavy external libraries, it features an immutable transaction-based Undo/Redo stack, an asynchronous FSM syntax highlighter, and a floating Waybar-inspired Nerd Font pill status line with true 24-bit TrueColor canvas transparency.
 
