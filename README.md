@@ -1,3 +1,12 @@
+# SenkuVim
+
+[![SenkuVim CI](https://github.com/islamMendjel/SenkuVim/actions/workflows/ci.yml/badge.svg)](https://github.com/islamMendjel/SenkuVim/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/islamMendjel/SenkuVim?color=00ff9f&logo=github)](https://github.com/islamMendjel/SenkuVim/releases)
+[![C17](https://img.shields.io/badge/standard-C17-blue.svg)](https://en.wikipedia.org/wiki/C17_(C_standard_revision))
+[![License: MIT](https://img.shields.io/badge/License-MIT-9775fa.svg)](LICENSE)
+
+![SenkuVim Demo](assets/demo.gif)
+
 <div align="center">
 
 ```
