@@ -263,7 +263,6 @@ make install
 # Clean build artifacts
 make clean
 ```
----
 
 Or directly without cloning or compiling :
 ```bash
@@ -280,8 +279,6 @@ makepkg -si
 ```
 
 This builds and registers `senkuvim-bin` directly inside `pacman`'s local database, allowing users to update or remove it via `sudo pacman -R senkuvim-bin`.
-
----
 
 ### Method 2: Test the Package Locally Right Now
 
