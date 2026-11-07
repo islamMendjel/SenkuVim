@@ -1,0 +1,17 @@
+# Maintainer: Islam Mendjel <islam.mendjel@gmail.com>
+pkgname=senkuvim-bin
+pkgver=1.0.0
+pkgrel=1
+pkgdesc="A zero-dependency modal terminal IDE in C17 for POSIX systems"
+arch=('x86_64')
+url="https://github.com/islamMendjel/SenkuVim"
+license=('MIT')
+provides=('senkuvim')
+conflicts=('senkuvim')
+source=("https://github.com/islamMendjel/SenkuVim/releases/download/v${pkgver}/senkuvim-linux-x86_64.tar.gz")
+sha256sums=('69f4ca3a7a13276573c1026762ec2c3ff51127af1a4ebf91364ea64cc3232681')
+
+package() {
+    install -Dm755 "${srcdir}/senkuvim" "${pkgdir}/usr/bin/senkuvim"
+    install -Dm644 "${srcdir}/README.md" "${pkgdir}/usr/share/doc/${pkgname}/README.md"
+}
