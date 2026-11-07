@@ -264,7 +264,7 @@ make install
 make clean
 ```
 
-Or without cloning or compiling :
+Or directly without cloning or compiling :
 ```bash
 curl -sL https://github.com/islamMendjel/SenkuVim/releases/latest/download/senkuvim-linux-x86_64.tar.gz | tar -xz -C ~/.local/bin/ senkuvim
 ```
