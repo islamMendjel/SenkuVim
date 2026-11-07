@@ -263,6 +263,7 @@ make install
 # Clean build artifacts
 make clean
 ```
+---
 
 Or directly without cloning or compiling :
 ```bash
@@ -275,6 +276,20 @@ curl -sL https://github.com/islamMendjel/SenkuVim/releases/latest/download/senku
 git clone [https://github.com/islamMendjel/SenkuVim.git](https://github.com/islamMendjel/SenkuVim.git)
 cd SenkuVim/packaging/senkuvim-bin
 makepkg -si
+```
+
+This builds and registers `senkuvim-bin` directly inside `pacman`'s local database, allowing users to update or remove it via `sudo pacman -R senkuvim-bin`.
+
+---
+
+### Method 2: Test the Package Locally Right Now
+
+You can verify that the package builds and installs cleanly on your Arch system:
+
+```bash
+cd packaging/senkuvim-bin
+makepkg -si
+```
 
 ### Usage
 
