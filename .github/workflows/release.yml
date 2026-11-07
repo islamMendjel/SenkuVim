@@ -1,0 +1,26 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Compile Release Tarball
+      run: |
+        make clean
+        make CFLAGS="-Wall -Wextra -Wpedantic -std=c17 -O3 -D_DEFAULT_SOURCE -D_BSD_SOURCE -D_GNU_SOURCE"
+        tar -czvf senkuvim-linux-x86_64.tar.gz senkuvim README.md
+
+    - name: Publish GitHub Release
+      uses: softprops/action-gh-release@v2
+      with:
+        files: senkuvim-linux-x86_64.tar.gz
+        generate_release_notes: true
