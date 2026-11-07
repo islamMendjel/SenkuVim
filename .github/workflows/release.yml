@@ -17,7 +17,7 @@ jobs:
       run: |
         make clean
         make CFLAGS="-Wall -Wextra -Wpedantic -std=c17 -O3 -D_DEFAULT_SOURCE -D_BSD_SOURCE -D_GNU_SOURCE"
-        tar -czvf senkuvim-linux-x86_64.tar.gz senkuvim README.md
+        tar -czvf senkuvim-linux-x86_64.tar.gz senkuvim README.md LICENSE
 
     - name: Publish GitHub Release
       uses: softprops/action-gh-release@v2
