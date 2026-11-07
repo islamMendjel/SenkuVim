@@ -236,92 +236,92 @@ typedef struct UndoAction {
 ### Requirements
 
 - Arch Linux or any POSIX-compliant Linux distribution
-- GCC with ISO C17 support (`gcc -std=c17`)
+- GCC or Clang with ISO C17 support (`-std=c17`)
 - GNU `make`
 - A terminal emulator with **24-bit TrueColor** and **Nerd Font** support
   - Recommended: Kitty · Alacritty · Foot · WezTerm
 
-### Commands
+---
 
-```bash
-# Clone
-git clone https://github.com/islamMendjel/SenkuVim.git
-cd SenkuVim
+## Installation Options
 
-# Build release binary (gcc -std=c17 -O2 -Wall -Wextra)
-make
+### Option 1: Quick Binary Download (Linux x86_64)
 
-# Build with AddressSanitizer + UndefinedBehaviorSanitizer
-make asan
-
-# Run the PTY automation test suite
-make test
-
-# Install to ~/.local/bin and /usr/local/bin
-make install
-
-# Clean build artifacts
-make clean
-```
-
-Or directly without cloning or compiling :
 ```bash
 curl -sL https://github.com/islamMendjel/SenkuVim/releases/latest/download/senkuvim-linux-x86_64.tar.gz | tar -xz -C ~/.local/bin/ senkuvim
 ```
----
-
-### Arch Linux (Direct PKGBUILD)
-
+### Option 2: Arch Linux (Direct PKGBUILD)
 ```bash
-git clone [https://github.com/islamMendjel/SenkuVim.git](https://github.com/islamMendjel/SenkuVim.git)
+git clone https://github.com/islamMendjel/SenkuVim.git
 cd SenkuVim/packaging/senkuvim-bin
 makepkg -si
+Installs and registers senkuvim-bin directly inside pacman's database.
 ```
 
-This builds and registers `senkuvim-bin` directly inside `pacman`'s local database, allowing users to update or remove it via `sudo pacman -R senkuvim-bin`.
-
-### Method 2: Test the Package Locally Right Now
-
-You can verify that the package builds and installs cleanly on your Arch system:
-
+### Option 3: Compile from Source
 ```bash
-cd packaging/senkuvim-bin
-makepkg -si
-```
+git clone https://github.com/islamMendjel/SenkuVim.git
+cd SenkuVim
 
-Verification: Run which senkuvim followed by pacman -Q senkuvim-bin. The system will show /usr/bin/senkuvim installed under package version 1.0.0-1
+# Build optimized release binary
+make
+
+# Install to ~/.local/bin and /usr/local/bin
+make install
+```
 
 ---
 
-### Usage
-
+## Usage
 ```bash
-# Open a file
+# Open an existing file
 senkuvim main.c
 
-# Or open empty buffer
+# Open an empty buffer
 senkuvim
 ```
 
 ---
 
 ## 🧪 Test Suite
+SenkuVim employs a dual-layer testing infrastructure: native C unit tests powered by the Unity framework alongside full PTY integration testing via Python.
 
-`test_senkuvim.py` drives the editor through a PTY using Python's `pty` module, automating real terminal input sequences and asserting on output. It verifies all 10 core behaviors:
-
-1. File open and initial render
-2. Normal mode navigation (`h j k l w b 0 $`)
-3. Insert mode character input
-4. Smart Tab insertion (4-space alignment)
-5. Soft-Tab Backspace unindent
-6. Auto-pair insertion and atomic deletion
-7. Auto-indent with brace block expansion
-8. Undo / Redo stack correctness
-9. Yank (`yy`), cut (`dd`), and paste (`p`)
-10. Save (`:w`) and quit (`:q`, `:wq`)
+### 1. Native C Unit Tests (Unity)
+Tests internal buffer rows, cursor tracking, smart tabs, and auto-pair delimiter handling directly against C structures:
 
 ```bash
-# Run directly
+# Run unit test suite
+make unit-test
+
+# Run unit tests under AddressSanitizer & UndefinedBehaviorSanitizer
+make unit-test-asan
+```
+
+### 2. End-to-End PTY Automation Suite (test_senkuvim.py)
+Drives the compiled binary inside a real pseudo-terminal, simulating keystrokes and asserting against terminal escape output across 10 core behaviors:
+
+File open and initial render
+
+Normal mode navigation (h j k l w b 0 $)
+
+Insert mode character input
+
+Smart Tab insertion (4-space alignment)
+
+Soft-Tab Backspace unindent
+
+Auto-pair insertion and atomic deletion
+
+Auto-indent with brace block expansion
+
+Undo / Redo transaction stack correctness
+
+Line manipulation: Yank (yy), cut (dd), paste (p)
+
+File persistence: Save (:w), quit (:q, :wq)
+
+```bash
+# Run PTY integration test suite
 python3 test_senkuvim.py
 
 # Or through Make
