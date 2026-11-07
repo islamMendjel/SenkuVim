@@ -244,6 +244,28 @@ typedef struct UndoAction {
 ### Commands
 
 ```bash
+# Clone
+git clone https://github.com/islamMendjel/SenkuVim.git
+cd SenkuVim
+
+# Build release binary (gcc -std=c17 -O2 -Wall -Wextra)
+make
+
+# Build with AddressSanitizer + UndefinedBehaviorSanitizer
+make asan
+
+# Run the PTY automation test suite
+make test
+
+# Install to ~/.local/bin and /usr/local/bin
+make install
+
+# Clean build artifacts
+make clean
+```
+
+Or without cloning or compiling :
+```bash
 curl -sL https://github.com/islamMendjel/SenkuVim/releases/latest/download/senkuvim-linux-x86_64.tar.gz | tar -xz -C ~/.local/bin/ senkuvim
 ```
 
