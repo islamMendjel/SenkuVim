@@ -288,6 +288,7 @@ You can verify that the package builds and installs cleanly on your Arch system:
 cd packaging/senkuvim-bin
 makepkg -si
 ```
+Verification: Run which senkuvim followed by pacman -Q senkuvim-bin. The system will show /usr/bin/senkuvim installed under package version 1.0.0-1
 ---
 
 ### Usage
