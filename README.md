@@ -269,6 +269,13 @@ Or directly without cloning or compiling :
 curl -sL https://github.com/islamMendjel/SenkuVim/releases/latest/download/senkuvim-linux-x86_64.tar.gz | tar -xz -C ~/.local/bin/ senkuvim
 ```
 
+### Arch Linux (Direct PKGBUILD)
+
+```bash
+git clone [https://github.com/islamMendjel/SenkuVim.git](https://github.com/islamMendjel/SenkuVim.git)
+cd SenkuVim/packaging/senkuvim-bin
+makepkg -si
+
 ### Usage
 
 ```bash
