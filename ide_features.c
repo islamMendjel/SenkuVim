@@ -414,10 +414,18 @@ void editorSmartBackspace(void) {
         return;
     }
 
-    /* Case 4: Standard single character backspace */
-    char deleted_char = row->chars[E.cx - 1];
-    undoPush(UNDO_DELETE_CHAR, E.cx - 1, E.cy, &deleted_char, 1);
-    editorDelChar();
+    /* Case 4: Standard single UTF-8 character backspace */
+    if (E.cx > 0) {
+        int prev_cx = utf8PrevCharOffset(row->chars, E.cx);
+        int char_bytes = E.cx - prev_cx;
+        if (char_bytes == 1) {
+            char deleted_char = row->chars[prev_cx];
+            undoPush(UNDO_DELETE_CHAR, prev_cx, E.cy, &deleted_char, 1);
+        } else {
+            undoPush(UNDO_DELETE_STRING, prev_cx, E.cy, &row->chars[prev_cx], (size_t)char_bytes);
+        }
+        editorDelChar();
+    }
 }
 
 /* ============================================================================
@@ -678,4 +686,20 @@ void editorPasteBelow(void) {
     E.cx = 0;
 
     editorSetStatusMessage("1 line pasted");
+}
+
+void editorClearUndoStack(UndoAction **stack) {
+    if (!stack || !*stack) return;
+
+    UndoAction *curr = *stack;
+    while (curr) {
+        UndoAction *next = curr->next;
+        if (curr->data) {
+            free(curr->data);
+            curr->data = NULL;
+        }
+        free(curr);
+        curr = next;
+    }
+    *stack = NULL;
 }

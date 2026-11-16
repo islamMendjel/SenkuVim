@@ -18,41 +18,95 @@
 
 #include "senkuvim.h"
 
+/* ============================================================================
+ * UTF-8 MULTIBYTE BOUNDARY HELPERS
+ * ============================================================================ */
+
 /*
- * editorRowCxToRx() - Converts a character index (cx) to a rendered column index (rx).
- * Why this is needed:
- * A tab character '\t' is a single byte in `chars`, but occupies multiple columns
- * on screen (up to SENKUVIM_TAB_STOP spaces). This function walks `chars` up to
- * index `cx` and accumulates visual column width.
+ * utf8IsCont() - Returns true if `c` is a UTF-8 continuation byte (10xxxxxx).
+ */
+bool utf8IsCont(unsigned char c) {
+    return (c & 0xC0) == 0x80;
+}
+
+/*
+ * utf8CharLen() - Returns expected byte length (1..4) from a UTF-8 lead byte.
+ */
+int utf8CharLen(unsigned char c) {
+    if ((c & 0x80) == 0x00) return 1;
+    if ((c & 0xE0) == 0xC0) return 2;
+    if ((c & 0xF0) == 0xE0) return 3;
+    if ((c & 0xF8) == 0xF0) return 4;
+    return 1; /* Invalid or continuation byte: advance safely by 1 */
+}
+
+/*
+ * utf8PrevCharOffset() - Steps backward from `offset` to the start byte of the
+ * preceding UTF-8 codepoint, never crossing below 0.
+ */
+int utf8PrevCharOffset(const char *s, int offset) {
+    if (s == NULL || offset <= 0) return 0;
+    int pos = offset - 1;
+    int steps = 0;
+    while (pos > 0 && steps < 3 && utf8IsCont((unsigned char)s[pos])) {
+        pos--;
+        steps++;
+    }
+    return pos;
+}
+
+/*
+ * utf8NextCharOffset() - Steps forward from `offset` to the start byte of the
+ * next UTF-8 codepoint, clamped to `len`.
+ */
+int utf8NextCharOffset(const char *s, int len, int offset) {
+    if (s == NULL || offset >= len) return len;
+    if (offset < 0) return 0;
+    int clen = utf8CharLen((unsigned char)s[offset]);
+    int next = offset + clen;
+    if (next > len) next = len;
+    return next;
+}
+
+/*
+ * editorRowCxToRx() - Converts a byte index (cx) to a rendered column index (rx).
+ * Handles both tab stops and multibyte UTF-8 sequences (1 column per codepoint).
  */
 int editorRowCxToRx(erow *row, int cx) {
-    if (row == NULL) return 0;
+    if (row == NULL || row->chars == NULL || cx <= 0) return 0;
+    int limit = (cx < row->size) ? cx : row->size;
     int rx = 0;
-    for (int j = 0; j < cx && j < row->size; j++) {
-        if (row->chars[j] == '\t') {
+    for (int j = 0; j < limit; j++) {
+        unsigned char uc = (unsigned char)row->chars[j];
+        if (uc == '\t') {
             /* Advance to the next multiple of SENKUVIM_TAB_STOP */
             rx += (SENKUVIM_TAB_STOP - 1) - (rx % SENKUVIM_TAB_STOP);
+            rx++;
+        } else if (!utf8IsCont(uc)) {
+            rx++;
         }
-        rx++;
     }
     return rx;
 }
 
 /*
- * editorRowRxToCx() - Converts a rendered column index (rx) back to a character index (cx).
- * Inverse mapping of editorRowCxToRx(). Used when placing the cursor based
- * on visual column positions (e.g. mouse clicks or vertical navigation).
+ * editorRowRxToCx() - Converts a rendered column index (rx) back to a byte index (cx).
+ * Always snaps to a valid UTF-8 codepoint start boundary.
  */
 int editorRowRxToCx(erow *row, int rx) {
-    if (row == NULL) return 0;
+    if (row == NULL || row->chars == NULL || rx <= 0) return 0;
     int cur_rx = 0;
-    int cx;
-    for (cx = 0; cx < row->size; cx++) {
-        if (row->chars[cx] == '\t') {
+    int cx = 0;
+    while (cx < row->size) {
+        unsigned char uc = (unsigned char)row->chars[cx];
+        int step = utf8CharLen(uc);
+        if (cx + step > row->size) step = row->size - cx;
+        if (uc == '\t') {
             cur_rx += (SENKUVIM_TAB_STOP - 1) - (cur_rx % SENKUVIM_TAB_STOP);
         }
         cur_rx++;
         if (cur_rx > rx) return cx;
+        cx += step;
     }
     return cx;
 }
@@ -95,9 +149,13 @@ void editorUpdateRow(erow *row) {
     row->rsize = idx;
 
     /* Allocate syntax highlight token array (1 byte per rendered char) */
-    row->hl = malloc((size_t)row->rsize);
-    if (row->hl == NULL && row->rsize > 0) {
-        die("malloc editorUpdateRow hl");
+    if (row->rsize > 0) {
+        row->hl = malloc((size_t)row->rsize);
+        if (row->hl == NULL) {
+            die("malloc editorUpdateRow hl");
+        }
+    } else {
+        row->hl = NULL;
     }
 
     /* Update syntax highlighting tokens for this row */
@@ -110,6 +168,7 @@ void editorUpdateRow(erow *row) {
  */
 void editorInsertRow(int at, const char *s, size_t len) {
     if (at < 0 || at > E.numrows) return;
+    if (s == NULL && len > 0) return;
 
     /* Expand the row pointer array */
     erow *new_row = realloc(E.row, sizeof(erow) * (size_t)(E.numrows + 1));
@@ -129,7 +188,9 @@ void editorInsertRow(int at, const char *s, size_t len) {
     E.row[at].chars = malloc(len + 1);
     if (E.row[at].chars == NULL) die("malloc editorInsertRow chars");
 
-    memcpy(E.row[at].chars, s, len);
+    if (len > 0 && s != NULL) {
+        memcpy(E.row[at].chars, s, len);
+    }
     E.row[at].chars[len] = '\0';
 
     E.row[at].rsize = 0;
@@ -164,7 +225,9 @@ void editorDelRow(int at) {
     if (at < 0 || at >= E.numrows || E.row == NULL) return;
 
     editorFreeRow(&E.row[at]);
-    memmove(&E.row[at], &E.row[at + 1], sizeof(erow) * (size_t)(E.numrows - at - 1));
+    if (at < E.numrows - 1) {
+        memmove(&E.row[at], &E.row[at + 1], sizeof(erow) * (size_t)(E.numrows - at - 1));
+    }
 
     for (int j = at; j < E.numrows - 1; j++) {
         E.row[j].idx--;
@@ -182,13 +245,18 @@ void editorDelRow(int at) {
  * editorRowInsertChar() - Inserts a single byte into a row's raw chars at offset `at`.
  */
 void editorRowInsertChar(erow *row, int at, int c) {
+    if (row == NULL) return;
     if (at < 0 || at > row->size) at = row->size;
 
     char *new_chars = realloc(row->chars, (size_t)(row->size + 2));
     if (new_chars == NULL) die("realloc editorRowInsertChar");
     row->chars = new_chars;
 
-    memmove(&row->chars[at + 1], &row->chars[at], (size_t)(row->size - at + 1));
+    if (at < row->size) {
+        memmove(&row->chars[at + 1], &row->chars[at], (size_t)(row->size - at + 1));
+    } else {
+        row->chars[row->size + 1] = '\0';
+    }
     row->size++;
     row->chars[at] = (char)c;
 
@@ -200,6 +268,7 @@ void editorRowInsertChar(erow *row, int at, int c) {
  * editorRowAppendString() - Appends a string of length `len` to the end of a row.
  */
 void editorRowAppendString(erow *row, const char *s, size_t len) {
+    if (row == NULL || s == NULL || len == 0) return;
     char *new_chars = realloc(row->chars, (size_t)(row->size + (int)len + 1));
     if (new_chars == NULL) die("realloc editorRowAppendString");
     row->chars = new_chars;
@@ -216,7 +285,7 @@ void editorRowAppendString(erow *row, const char *s, size_t len) {
  * editorRowDelChar() - Removes a single byte from a row at offset `at`.
  */
 void editorRowDelChar(erow *row, int at) {
-    if (at < 0 || at >= row->size) return;
+    if (row == NULL || row->chars == NULL || at < 0 || at >= row->size) return;
 
     memmove(&row->chars[at], &row->chars[at + 1], (size_t)(row->size - at));
     row->size--;
@@ -264,7 +333,7 @@ void editorInsertNewline(void) {
 }
 
 /*
- * editorDelChar() - Deletes the character immediately before the cursor (Backspace).
+ * editorDelChar() - Deletes the UTF-8 character immediately before the cursor (Backspace).
  * If cursor is at column 0, joins the current line to the end of the previous line.
  */
 void editorDelChar(void) {
@@ -273,12 +342,18 @@ void editorDelChar(void) {
 
     erow *row = &E.row[E.cy];
     if (E.cx > 0) {
-        editorRowDelChar(row, E.cx - 1);
-        E.cx--;
+        int prev_cx = utf8PrevCharOffset(row->chars, E.cx);
+        int del_bytes = E.cx - prev_cx;
+        for (int i = 0; i < del_bytes; i++) {
+            editorRowDelChar(row, prev_cx);
+        }
+        E.cx = prev_cx;
     } else {
         /* Merge current row with the row above */
         E.cx = E.row[E.cy - 1].size;
-        editorRowAppendString(&E.row[E.cy - 1], row->chars, (size_t)row->size);
+        if (row->size > 0 && row->chars != NULL) {
+            editorRowAppendString(&E.row[E.cy - 1], row->chars, (size_t)row->size);
+        }
         editorDelRow(E.cy);
         E.cy--;
     }
@@ -293,15 +368,17 @@ char *editorRowsToString(int *buflen) {
     for (int j = 0; j < E.numrows; j++) {
         totlen += E.row[j].size + 1; /* +1 for newline */
     }
-    *buflen = totlen;
+    if (buflen != NULL) *buflen = totlen;
 
     char *buf = malloc((size_t)(totlen + 1));
     if (buf == NULL) die("malloc editorRowsToString");
 
     char *p = buf;
     for (int j = 0; j < E.numrows; j++) {
-        memcpy(p, E.row[j].chars, (size_t)E.row[j].size);
-        p += E.row[j].size;
+        if (E.row[j].size > 0 && E.row[j].chars != NULL) {
+            memcpy(p, E.row[j].chars, (size_t)E.row[j].size);
+            p += E.row[j].size;
+        }
         *p = '\n';
         p++;
     }
@@ -314,6 +391,7 @@ char *editorRowsToString(int *buflen) {
  * editorOpen() - Loads a text file from disk into the editor buffer.
  */
 void editorOpen(const char *filename) {
+    if (filename == NULL) return;
     free(E.filename);
     E.filename = strdup(filename);
     if (E.filename == NULL) die("strdup filename");
@@ -342,9 +420,31 @@ void editorOpen(const char *filename) {
         editorInsertRow(E.numrows, line, (size_t)linelen);
     }
 
+    if (ferror(fp)) {
+        free(line);
+        fclose(fp);
+        die("getline");
+    }
+
     free(line);
     fclose(fp);
     E.dirty = 0;
+}
+
+/*
+ * writeAllFd() - Loops write() until all `len` bytes are written or an error occurs.
+ */
+static bool writeAllFd(int fd, const char *buf, size_t len) {
+    size_t written = 0;
+    while (written < len) {
+        ssize_t n = write(fd, buf + written, len - written);
+        if (n <= 0) {
+            if (n < 0 && (errno == EINTR || errno == EAGAIN)) continue;
+            return false;
+        }
+        written += (size_t)n;
+    }
+    return true;
 }
 
 /*
@@ -357,20 +457,20 @@ void editorSave(void) {
         return;
     }
 
-    int len;
+    int len = 0;
     char *buf = editorRowsToString(&len);
 
     /* Open file, write contents, and close */
     int fd = open(E.filename, O_RDWR | O_CREAT | O_TRUNC, 0644);
     if (fd != -1) {
-        if (write(fd, buf, (size_t)len) == len) {
-            close(fd);
+        bool ok = writeAllFd(fd, buf, (size_t)len);
+        if (close(fd) == -1) ok = false;
+        if (ok) {
             free(buf);
             E.dirty = 0;
             editorSetStatusMessage("[OK] %d bytes written to '%s'", len, E.filename);
             return;
         }
-        close(fd);
     }
 
     free(buf);

@@ -260,11 +260,11 @@ void editorDrawRows(abuf *ab) {
         if (len < 0) len = 0;
         if (len > avail_cols) len = avail_cols;
 
-        char *c = (row->render != NULL) ? &row->render[E.coloff] : NULL;
-        unsigned char *hl = (row->hl != NULL) ? &row->hl[E.coloff] : NULL;
         const char *current_color = NULL;
 
-        if (c != NULL && hl != NULL) {
+        if (len > 0 && row->render != NULL && row->hl != NULL) {
+            char *c = &row->render[E.coloff];
+            unsigned char *hl = &row->hl[E.coloff];
             for (int j = 0; j < len; j++) {
                 int current_rx = E.coloff + j;
 
@@ -491,6 +491,8 @@ void editorRefreshScreen(void) {
 
     abuf ab = ABUF_INIT;
 
+    /* Begin synchronized update (eliminates flicker on modern terminals) */
+    abAppend(&ab, "\x1b[?2026h", 8);
     /* Hide cursor during frame composition */
     abAppend(&ab, "\x1b[?25l", 6);
     /* Place cursor at screen origin (1, 1) */
@@ -527,8 +529,8 @@ void editorRefreshScreen(void) {
         abAppend(&ab, cursor_buf, (int)strlen(cursor_buf));
     }
 
-    /* Restore cursor visibility */
-    abAppend(&ab, "\x1b[?25h", 6);
+    /* Restore cursor visibility and end synchronized update */
+    abAppend(&ab, "\x1b[?25h\x1b[?2026l", 14);
 
     /* Flush frame to terminal using looping writeAll */
     editorWriteAll(ab.b, (size_t)ab.len);

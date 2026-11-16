@@ -27,9 +27,53 @@
  */
 
 #include "senkuvim.h"
+#include <signal.h>
+#include <string.h>
 
 /* Flag set by asynchronous SIGWINCH handler */
 static volatile sig_atomic_t window_resized = 0;
+
+/* Flag tracking whether raw mode and orig_termios have been initialized */
+static volatile sig_atomic_t raw_mode_enabled = 0;
+
+/*
+ * writeLiteralSafe() - Async-signal-safe helper to write a fixed string literal
+ * without unused-result warnings.
+ */
+static void writeLiteralSafe(int fd, const char *buf, size_t len) {
+    size_t written = 0;
+    while (written < len) {
+        ssize_t n = write(fd, buf + written, len - written);
+        if (n <= 0) {
+            if (n < 0 && errno == EINTR) continue;
+            break;
+        }
+        written += (size_t)n;
+    }
+}
+
+/*
+ * editorFatalSignalHandler() - Async-signal-safe crash/termination handler.
+ * Restores terminal state cleanly before terminating with 128 + signal.
+ */
+void editorFatalSignalHandler(int sig) {
+    if (raw_mode_enabled) {
+        /* Restore cursor visibility and leave alternate screen buffer */
+        static const char seq[] = "\x1b[?25h\x1b[?1049l";
+        writeLiteralSafe(STDOUT_FILENO, seq, sizeof(seq) - 1);
+        tcsetattr(STDIN_FILENO, TCSANOW, &E.orig_termios);
+        raw_mode_enabled = 0;
+    }
+
+    static const char msg[] = "\n[SenkuVim] Caught terminating signal. Restored terminal.\n";
+    writeLiteralSafe(STDERR_FILENO, msg, sizeof(msg) - 1);
+
+    _exit(128 + sig);
+}
+
+void editorSetupSignals(void) {
+    setupSignalHandlers();
+}
 
 /*
  * die() - Clean emergency exit.
@@ -37,9 +81,10 @@ static volatile sig_atomic_t window_resized = 0;
  * ensuring the user's terminal shell remains completely usable.
  */
 void die(const char *s) {
-    /* Clear screen and place cursor at top-left */
-    write(STDOUT_FILENO, "\x1b[2J", 4);
-    write(STDOUT_FILENO, "\x1b[H", 3);
+    if (raw_mode_enabled) {
+        /* Clear screen and place cursor at top-left */
+        writeLiteralSafe(STDOUT_FILENO, "\x1b[2J\x1b[H", 7);
+    }
 
     /* Restore original terminal settings */
     disableRawMode();
@@ -53,15 +98,15 @@ void die(const char *s) {
  * Called at exit (via atexit) or on crash to return the terminal to canonical mode.
  */
 void disableRawMode(void) {
-    /* Leave the alternate screen buffer if active */
-    editorWriteAll("\x1b[?1049l", 8);
+    if (!raw_mode_enabled) return;
 
-    /* Ensure cursor is visible */
-    editorWriteAll("\x1b[?25h", 6);
+    /* Leave the alternate screen buffer and ensure cursor is visible */
+    editorWriteAll("\x1b[?25h\x1b[?1049l", 14);
 
     if (tcsetattr(STDIN_FILENO, TCSANOW, &E.orig_termios) == -1) {
         /* Silently ignore error during exit cleanup */
     }
+    raw_mode_enabled = 0;
 }
 
 /*
@@ -108,9 +153,10 @@ void enableRawMode(void) {
     if (tcsetattr(STDIN_FILENO, TCSANOW, &raw) == -1) {
         die("tcsetattr");
     }
+    raw_mode_enabled = 1;
 
     /* Switch to the dedicated alternate screen buffer (standard in Vim / Tmux) */
-    write(STDOUT_FILENO, "\x1b[?1049h", 8);
+    editorWriteAll("\x1b[?1049h", 8);
 }
 
 /*
@@ -152,14 +198,44 @@ static void handleSigwinch(int sig) {
  * setupSignalHandlers() - Install signal handlers.
  * Intercepts SIGWINCH for live window resizing without crashing.
  */
+/*
+ * setupSignalHandlers() - Install all signal handlers.
+ * Intercepts SIGWINCH for live window resizing and fatal signals (SIGINT,
+ * SIGTERM, SIGSEGV, SIGABRT) so terminal state is always restored cleanly.
+ */
 void setupSignalHandlers(void) {
-    struct sigaction sa;
-    memset(&sa, 0, sizeof(sa));
-    sa.sa_handler = handleSigwinch;
-    sigemptyset(&sa.sa_mask);
-    sa.sa_flags = SA_RESTART;
-    if (sigaction(SIGWINCH, &sa, NULL) == -1) {
+    struct sigaction sa_winch;
+    memset(&sa_winch, 0, sizeof(sa_winch));
+    sa_winch.sa_handler = handleSigwinch;
+    sigemptyset(&sa_winch.sa_mask);
+    /* Omit SA_RESTART so read() wakes immediately on SIGWINCH resize */
+    sa_winch.sa_flags = 0;
+    if (sigaction(SIGWINCH, &sa_winch, NULL) == -1) {
         die("sigaction SIGWINCH");
+    }
+
+    struct sigaction sa_fatal;
+    memset(&sa_fatal, 0, sizeof(sa_fatal));
+    sa_fatal.sa_handler = editorFatalSignalHandler;
+    sigemptyset(&sa_fatal.sa_mask);
+    sa_fatal.sa_flags = SA_RESETHAND;
+    sigaction(SIGTERM, &sa_fatal, NULL);
+    sigaction(SIGINT,  &sa_fatal, NULL);
+    sigaction(SIGSEGV, &sa_fatal, NULL);
+    sigaction(SIGABRT, &sa_fatal, NULL);
+}
+
+/*
+ * handlePendingResize() - Checks and applies pending SIGWINCH window dimensions.
+ */
+static void handlePendingResize(void) {
+    if (!window_resized) return;
+    window_resized = 0;
+    int rows, cols;
+    if (getWindowSize(&rows, &cols) == 0) {
+        E.screenrows = (rows > 2) ? rows - 2 : 1;
+        E.screencols = (cols > 10) ? cols : 10;
+        editorRefreshScreen();
     }
 }
 
@@ -169,8 +245,13 @@ static size_t unget_head = 0;
 static size_t unget_tail = 0;
 
 static void pushbackByte(char c) {
+    size_t next_tail = (unget_tail + 1) % sizeof(unget_buf);
+    if (next_tail == unget_head) {
+        /* Ring buffer full: drop oldest byte rather than corrupting head */
+        unget_head = (unget_head + 1) % sizeof(unget_buf);
+    }
     unget_buf[unget_tail] = c;
-    unget_tail = (unget_tail + 1) % sizeof(unget_buf);
+    unget_tail = next_tail;
 }
 
 static int readRawByte(char *c) {
@@ -191,30 +272,14 @@ int editorReadKey(void) {
     char c;
 
     /* Check if window was resized while waiting */
-    if (window_resized) {
-        window_resized = 0;
-        int rows, cols;
-        if (getWindowSize(&rows, &cols) == 0) {
-            E.screenrows = (rows > 2) ? rows - 2 : 1;
-            E.screencols = (cols > 10) ? cols : 10;
-            editorRefreshScreen();
-        }
-    }
+    handlePendingResize();
 
     /* Loop until a key is read; read() times out every 100ms per VTIME */
     while ((nread = readRawByte(&c)) != 1) {
         if (nread == -1 && errno != EAGAIN && errno != EINTR) {
             die("read");
         }
-        if (window_resized) {
-            window_resized = 0;
-            int rows, cols;
-            if (getWindowSize(&rows, &cols) == 0) {
-                E.screenrows = (rows > 2) ? rows - 2 : 1;
-                E.screencols = (cols > 10) ? cols : 10;
-                editorRefreshScreen();
-            }
-        }
+        handlePendingResize();
     }
 
     /* If character is not Escape, return plain ASCII/byte directly */
@@ -287,19 +352,30 @@ int editorReadKey(void) {
  * ============================================================================ */
 
 /*
- * abAppend() - Dynamically reallocates the buffer to append new string bytes.
- * Uses realloc() to grow the memory block safely.
+ * abAppend() - Dynamically grows the buffer using geometric capacity doubling.
+ * Eliminates O(N^2) realloc() calls during frame rendering.
  */
 void abAppend(abuf *ab, const char *s, int len) {
-    if (len <= 0 || s == NULL) return;
+    if (ab == NULL || len <= 0 || s == NULL) return;
 
-    char *new_buf = realloc(ab->b, (size_t)(ab->len + len));
-    if (new_buf == NULL) {
-        die("realloc abuf");
+    if (ab->len + len > ab->cap) {
+        int new_cap = (ab->cap == 0) ? 4096 : ab->cap;
+        while (new_cap < ab->len + len) {
+            if (new_cap > INT_MAX / 2) {
+                new_cap = ab->len + len;
+                break;
+            }
+            new_cap *= 2;
+        }
+        char *new_buf = realloc(ab->b, (size_t)new_cap);
+        if (new_buf == NULL) {
+            die("realloc abuf");
+        }
+        ab->b = new_buf;
+        ab->cap = new_cap;
     }
 
-    memcpy(&new_buf[ab->len], s, (size_t)len);
-    ab->b = new_buf;
+    memcpy(&ab->b[ab->len], s, (size_t)len);
     ab->len += len;
 }
 
@@ -307,11 +383,13 @@ void abAppend(abuf *ab, const char *s, int len) {
  * abFree() - Frees the dynamic append buffer memory.
  */
 void abFree(abuf *ab) {
+    if (ab == NULL) return;
     if (ab->b != NULL) {
         free(ab->b);
         ab->b = NULL;
     }
     ab->len = 0;
+    ab->cap = 0;
 }
 
 /*

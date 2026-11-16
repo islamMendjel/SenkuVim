@@ -4,12 +4,13 @@
 # ==============================================================================
 
 CC      := gcc
-CFLAGS  := -Wall -Wextra -Wpedantic -std=c17 -O2 -D_DEFAULT_SOURCE -D_BSD_SOURCE -D_GNU_SOURCE
+CFLAGS  := -Wall -Wextra -Wpedantic -std=c17 -O2 -D_DEFAULT_SOURCE -D_BSD_SOURCE -D_GNU_SOURCE -MMD -MP
 LDFLAGS :=
 
 TARGET  := senkuvim
 SRCS    := main.c terminal.c buffer.c ide_features.c syntax.c ui_rice.c
 OBJS    := $(SRCS:.c=.o)
+DEPS    := $(SRCS:.c=.d)
 HEADERS := senkuvim.h
 
 # Unity C unit test configuration
@@ -59,7 +60,7 @@ asan:
 	$(CC) -fsanitize=address,undefined -g -Wall -Wextra -Wpedantic -std=c17 -D_DEFAULT_SOURCE -D_BSD_SOURCE -D_GNU_SOURCE $(SRCS) -o $(TARGET)_asan
 
 clean:
-	rm -f $(OBJS) $(TARGET) $(TARGET)_asan $(TEST_OBJS) $(TEST_TARGET) $(TEST_TARGET)_asan test_out.txt test_c.c test_py.py valgrind_test.txt valgrind.log
+	rm -f $(OBJS) $(DEPS) $(TARGET) $(TARGET)_asan $(TEST_OBJS) tests/*.d $(TEST_TARGET) $(TEST_TARGET)_asan test_out.txt test_c.c test_py.py valgrind_test.txt valgrind.log
 
 valgrind: $(TARGET)
 	valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes ./$(TARGET)
@@ -67,11 +68,13 @@ valgrind: $(TARGET)
 install: $(TARGET)
 	@if [ -w $(DESTDIR)$(PREFIX)/bin ] 2>/dev/null || [ "$$(id -u)" = "0" ]; then \
 		install -d $(DESTDIR)$(PREFIX)/bin && \
-		install -m 755 $(TARGET) $(DESTDIR)$(PREFIX)/bin/$(TARGET); \
+		install -m 755 $(TARGET) $(DESTDIR)$(PREFIX)/bin/$(TARGET) && \
+		ln -sf $(TARGET) $(DESTDIR)$(PREFIX)/bin/svim; \
 	fi
 	mkdir -p $(USER_BIN)
 	cp $(TARGET) $(USER_BIN)/$(TARGET)
+	ln -sf $(TARGET) $(USER_BIN)/svim
 
 uninstall:
-	rm -f $(DESTDIR)$(PREFIX)/bin/$(TARGET)
-	rm -f $(USER_BIN)/$(TARGET)
+	rm -f $(DESTDIR)$(PREFIX)/bin/$(TARGET) $(DESTDIR)$(PREFIX)/bin/svim
+	rm -f $(USER_BIN)/$(TARGET) $(USER_BIN)/svim

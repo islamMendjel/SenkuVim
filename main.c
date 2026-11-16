@@ -127,8 +127,8 @@ static void editorMoveCursor(int key) {
     switch (key) {
         case ARROW_LEFT:
         case 'h':
-            if (E.cx > 0) {
-                E.cx--;
+            if (E.cx > 0 && row != NULL) {
+                E.cx = utf8PrevCharOffset(row->chars, E.cx);
             } else if (E.cy > 0) {
                 /* Wrap to end of previous line */
                 E.cy--;
@@ -139,7 +139,7 @@ static void editorMoveCursor(int key) {
         case ARROW_RIGHT:
         case 'l':
             if (row && E.cx < row->size) {
-                E.cx++;
+                E.cx = utf8NextCharOffset(row->chars, row->size, E.cx);
             } else if (row && E.cx == row->size && E.cy < E.numrows - 1) {
                 /* Wrap to start of next line */
                 E.cy++;
@@ -171,6 +171,9 @@ static void editorMoveCursor(int key) {
         E.cx = rowlen;
     }
     if (E.cx < 0) E.cx = 0;
+    while (E.cx > 0 && E.cx < rowlen && row && row->chars && utf8IsCont((unsigned char)row->chars[E.cx])) {
+        E.cx--;
+    }
 }
 
 /* ============================================================================
@@ -539,8 +542,8 @@ void editorProcessKeypress(void) {
                 break;
 
             case '$':
-                if (E.numrows > 0 && E.row != NULL && E.cy < E.numrows) {
-                    E.cx = (E.row[E.cy].size > 0) ? E.row[E.cy].size - 1 : 0;
+                if (E.numrows > 0 && E.row != NULL && E.cy < E.numrows && E.row[E.cy].size > 0) {
+                    E.cx = utf8PrevCharOffset(E.row[E.cy].chars, E.row[E.cy].size);
                 } else {
                     E.cx = 0;
                 }

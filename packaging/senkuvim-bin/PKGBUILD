@@ -13,5 +13,7 @@ sha256sums=('69f4ca3a7a13276573c1026762ec2c3ff51127af1a4ebf91364ea64cc3232681')
 
 package() {
     install -Dm755 "${srcdir}/senkuvim" "${pkgdir}/usr/bin/senkuvim"
+    ln -sf senkuvim "${pkgdir}/usr/bin/svim"
     install -Dm644 "${srcdir}/README.md" "${pkgdir}/usr/share/doc/${pkgname}/README.md"
+    install -Dm644 "${srcdir}/LICENSE" "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
 }

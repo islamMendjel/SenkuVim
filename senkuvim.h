@@ -218,9 +218,10 @@ typedef struct SyntaxDefinition {
 typedef struct abuf {
     char *b;
     int len;
+    int cap;
 } abuf;
 
-#define ABUF_INIT { NULL, 0 }
+#define ABUF_INIT { NULL, 0, 0 }
 
 /* ============================================================================
  * GLOBAL EDITOR CONFIGURATION (E)
@@ -264,6 +265,7 @@ extern EditorConfig E;
 
 /* --- Terminal Handling (terminal.c) --- */
 void enableRawMode(void);
+void editorSetupSignals(void);
 void disableRawMode(void);
 int getWindowSize(int *rows, int *cols);
 int editorReadKey(void);
@@ -274,6 +276,10 @@ void abFree(abuf *ab);
 void editorWriteAll(const char *buf, size_t len);
 
 /* --- Buffer & Line Operations (buffer.c) --- */
+bool utf8IsCont(unsigned char c);
+int utf8CharLen(unsigned char c);
+int utf8PrevCharOffset(const char *s, int offset);
+int utf8NextCharOffset(const char *s, int len, int offset);
 int editorRowCxToRx(erow *row, int cx);
 int editorRowRxToCx(erow *row, int rx);
 void editorUpdateRow(erow *row);
