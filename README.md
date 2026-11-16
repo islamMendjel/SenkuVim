@@ -8,17 +8,14 @@
 ![SenkuVim Demo](assets/demo.gif)
 
 <div align="center">
+
 ```
   ____             _         __     ___           
-
  / ___|  ___ _ __ | | ___   _\ \   / (_)_ __ ___  
-
  \___ \ / _ \ '_ \| |/ / | | |\ \ / /| | '_ ` _ \ 
-
   ___) |  __/ | | |   <| |_| | \ V / | | | | | | |
-
  |____/ \___|_| |_|_|\_\\__,_|  \_/  |_|_| |_| |_|
-
+```
 
 **A zero-dependency modal terminal IDE · Pure C17 · POSIX · Arch Linux**
 
