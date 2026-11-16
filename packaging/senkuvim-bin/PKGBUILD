@@ -9,7 +9,7 @@ license=('MIT')
 provides=('senkuvim')
 conflicts=('senkuvim')
 source=("https://github.com/islamMendjel/SenkuVim/releases/download/v${pkgver}/senkuvim-linux-x86_64.tar.gz")
-sha256sums=('69f4ca3a7a13276573c1026762ec2c3ff51127af1a4ebf91364ea64cc3232681')
+sha256sums=('01cda948121e34de0c6076c1e7e1a846b70191511d1c420b78c7683043fb3678')
 
 package() {
     install -Dm755 "${srcdir}/senkuvim" "${pkgdir}/usr/bin/senkuvim"
