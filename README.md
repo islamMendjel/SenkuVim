@@ -1,3 +1,5 @@
+<div align="center">
+  
 # SenkuVim
 
 [![SenkuVim CI](https://github.com/islamMendjel/SenkuVim/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/islamMendjel/SenkuVim/actions/workflows/ci.yml)
@@ -7,7 +9,6 @@
 
 ![SenkuVim Demo](assets/demo.gif)
 
-<div align="center">
 
 ```
   ____             _         __     ___           
